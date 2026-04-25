@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SortLogix — 獎勵兌換</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <style>
+    .credits-banner { background:var(--green-700); color:#fff; border-radius:var(--radius-lg); padding:24px 28px; display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .cb-left h2 { font-size:13px; font-weight:400; opacity:0.75; margin-bottom:4px; }
+    .cb-left .big { font-size:42px; font-weight:300; letter-spacing:-2px; font-family:'DM Mono',monospace; line-height:1; }
+    .cb-left .unit { font-size:13px; opacity:0.7; }
+    .cb-right { text-align:right; font-size:12px; opacity:0.7; }
+    .rewards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
+    .reward-card { background:var(--white); border:1px solid rgba(0,0,0,0.08); border-radius:var(--radius-lg); padding:18px; cursor:pointer; transition:all var(--transition); }
+    .reward-card:hover { border-color:var(--green-400); box-shadow:var(--shadow-md); transform:translateY(-2px); }
+    .reward-card.unaffordable { opacity:0.55; }
+    .reward-icon { font-size:28px; margin-bottom:10px; }
+    .reward-name { font-size:13.5px; font-weight:500; margin-bottom:4px; }
+    .reward-pts  { font-size:22px; font-weight:300; letter-spacing:-0.8px; color:var(--green-700); font-family:'DM Mono',monospace; line-height:1; }
+    .reward-pts-unit { font-size:11px; color:var(--gray-400); margin-top:2px; }
+    .reward-stock { font-size:11px; color:var(--gray-400); margin-top:8px; }
+    .confirm-btn { width:100%; margin-top:16px; }
+    .modal-icon { font-size:40px; text-align:center; margin-bottom:12px; }
+    .success-anim { animation: popIn 0.3s cubic-bezier(.4,0,.2,1); }
+    @keyframes popIn { from { transform:scale(0.8);opacity:0; } to { transform:none;opacity:1; } }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <main class="main-content">
+    <div class="page-header fade-up">
+      <h1 class="page-title">獎勵兌換</h1>
+      <p class="page-subtitle">用積分兌換各種環保獎勵</p>
+    </div>
+
+    <div class="credits-banner fade-up">
+      <div class="cb-left">
+        <h2>我的積分</h2>
+        <div class="big" id="banner-pts">620</div>
+        <div class="unit">Green Credits</div>
+      </div>
+      <div class="cb-right">
+        <div>本月獲得</div>
+        <div style="font-size:20px;font-weight:300;font-family:'DM Mono',monospace">+620</div>
+        <div style="margin-top:8px">距下一等級</div>
+        <div style="font-size:20px;font-weight:300;font-family:'DM Mono',monospace">380 pts</div>
+      </div>
+    </div>
+
+    <div class="chip-row fade-up" id="reward-chips">
+      <button class="chip active" data-cat="all">全部</button>
+      <button class="chip" data-cat="coupon">折價券</button>
+      <button class="chip" data-cat="food">餐飲</button>
+      <button class="chip" data-cat="eco">環保商品</button>
+    </div>
+
+    <div class="rewards-grid fade-up-2" id="rewards-grid"></div>
+  </main>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="reward-modal" onclick="if(event.target===this)closeRewardModal()">
+  <div class="modal" id="reward-modal-content">
+    <button class="modal-close" onclick="closeRewardModal()">✕</button>
+    <div id="reward-modal-body"></div>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal-overlay" id="success-modal" onclick="if(event.target===this)closeSuccess()">
+  <div class="modal" style="text-align:center">
+    <div id="success-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="global-toast"></div>
+<script src="js/shared.js"></script>
+<script>
+  document.getElementById('sidebar-mount').innerHTML = renderSidebar('rewards');
+  let myCredits = DATA.credits;
+
+  function renderRewards(cat) {
+    const grid = document.getElementById('rewards-grid');
+    const filtered = cat==='all' ? DATA.rewards : DATA.rewards.filter(r=>r.cat===cat);
+    grid.innerHTML = '';
+    filtered.forEach(r => {
+      const affordable = myCredits >= r.pts;
+      const card = document.createElement('div');
+      card.className = 'reward-card'+(affordable?'':' unaffordable');
+      card.onclick = () => openRewardModal(r.id);
+      card.innerHTML = `
+        <div class="reward-icon">${r.icon}</div>
+        <div class="reward-name">${r.name}</div>
+        <div style="margin-top:8px">
+          <div class="reward-pts">${r.pts}</div>
+          <div class="reward-pts-unit">積分</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+          <div class="reward-stock">庫存 ${r.stock}</div>
+          ${affordable
+            ? '<span class="badge badge-green">可兌換</span>'
+            : `<span class="badge badge-gray">還差 ${r.pts-myCredits} 分</span>`}
+        </div>`;
+      grid.appendChild(card);
+    });
+  }
+  renderRewards('all');
+
+  document.getElementById('reward-chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('#reward-chips .chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    renderRewards(chip.dataset.cat);
+  });
+
+  function openRewardModal(id) {
+    const r = DATA.rewards.find(x=>x.id===id);
+    if (!r) return;
+    const affordable = myCredits >= r.pts;
+    document.getElementById('reward-modal-body').innerHTML = `
+      <div class="modal-icon">${r.icon}</div>
+      <div class="modal-title" style="text-align:center">${r.name}</div>
+      <div class="modal-sub" style="text-align:center">${r.pts} 積分兌換</div>
+      <div class="modal-row" style="margin-top:12px"><span class="modal-key">我的積分</span><span class="modal-val">${myCredits}</span></div>
+      <div class="modal-row"><span class="modal-key">兌換所需</span><span class="modal-val" style="color:var(--green-700)">${r.pts}</span></div>
+      <div class="modal-row"><span class="modal-key">兌換後剩餘</span><span class="modal-val">${affordable?myCredits-r.pts:'不足'}</span></div>
+      <div class="modal-row"><span class="modal-key">剩餘庫存</span><span class="modal-val">${r.stock} 份</span></div>
+      ${affordable
+        ? `<button class="btn btn-primary confirm-btn" onclick="confirmRedeem(${r.id})">確認兌換</button>`
+        : `<button class="btn btn-secondary confirm-btn" disabled style="opacity:0.5;cursor:not-allowed">積分不足</button>`}`;
+    document.getElementById('reward-modal').classList.add('open');
+  }
+
+  function confirmRedeem(id) {
+    const r = DATA.rewards.find(x=>x.id===id);
+    closeRewardModal();
+    myCredits -= r.pts;
+    document.getElementById('banner-pts').textContent = myCredits;
+    document.getElementById('success-body').innerHTML = `
+      <div class="success-anim" style="font-size:48px;margin-bottom:12px">🎉</div>
+      <div class="modal-title">兌換成功！</div>
+      <div style="font-size:13px;color:var(--gray-400);margin:8px 0 16px">「${r.name}」已加入你的獎勵</div>
+      <div style="background:var(--green-100);border-radius:var(--radius-md);padding:14px;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--green-700)">剩餘積分</div>
+        <div style="font-size:28px;font-weight:300;letter-spacing:-1px;color:var(--green-700);font-family:'DM Mono',monospace">${myCredits}</div>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="closeSuccess();renderRewards(document.querySelector('#reward-chips .chip.active').dataset.cat)">繼續瀏覽</button>`;
+    document.getElementById('success-modal').classList.add('open');
+    showToast('兌換成功！已扣除 '+r.pts+' 積分');
+  }
+
+  function closeRewardModal() { document.getElementById('reward-modal').classList.remove('open'); }
+  function closeSuccess()     { document.getElementById('success-modal').classList.remove('open'); }
+</script>
+</body>
+</html>

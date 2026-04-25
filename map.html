@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SortLogix — 機台地圖</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <style>
+    .map-layout { display:grid; grid-template-columns:1fr 320px; gap:16px; align-items:start; }
+    .map-svg-wrap { background:var(--green-100); border-radius:var(--radius-lg); overflow:hidden; border:1px solid rgba(0,0,0,0.07); }
+    .machine-list { display:flex; flex-direction:column; gap:8px; }
+    .machine-card { padding:14px 16px; border-radius:var(--radius-md); border:1px solid rgba(0,0,0,0.08); background:var(--white); cursor:pointer; transition:all var(--transition); }
+    .machine-card:hover { border-color:var(--green-400); box-shadow:var(--shadow-sm); }
+    .machine-card.selected { border-color:var(--green-700); background:var(--green-100); }
+    .machine-name { font-size:13.5px; font-weight:500; }
+    .machine-loc  { font-size:12px; color:var(--gray-400); margin-top:2px; }
+    .machine-footer { display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
+    .fill-bar-wrap { flex:1; height:4px; background:var(--gray-100); border-radius:2px; overflow:hidden; margin:0 10px; }
+    .fill-bar { height:100%; border-radius:2px; }
+    .fill-pct { font-size:11px; color:var(--gray-400); font-family:'DM Mono',monospace; flex-shrink:0; }
+    .dot-online  { width:7px;height:7px;border-radius:50%;background:var(--green-600);flex-shrink:0; }
+    .dot-full    { width:7px;height:7px;border-radius:50%;background:#EF9F27;flex-shrink:0; }
+    .dot-offline { width:7px;height:7px;border-radius:50%;background:var(--gray-300,#ccc);flex-shrink:0; }
+    .legend { display:flex; gap:16px; margin-bottom:12px; flex-wrap:wrap; }
+    .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gray-500); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <main class="main-content">
+    <div class="page-header fade-up">
+      <h1 class="page-title">機台地圖</h1>
+      <p class="page-subtitle">校園內共 <span id="online-count">0</span> 台可用</p>
+    </div>
+
+    <div class="legend fade-up">
+      <div class="legend-item"><span class="dot-online"></span>可用</div>
+      <div class="legend-item"><span class="dot-full"></span>容量已滿</div>
+      <div class="legend-item"><span class="dot-offline"></span>離線維護</div>
+    </div>
+
+    <div class="map-layout fade-up-2">
+      <!-- SVG Campus Map -->
+      <div class="map-svg-wrap">
+        <svg id="campus-map" width="100%" viewBox="0 0 500 420" xmlns="http://www.w3.org/2000/svg">
+          <!-- Background -->
+          <rect width="500" height="420" fill="#EAF3DE"/>
+          <!-- Green areas -->
+          <ellipse cx="250" cy="210" rx="60" ry="45" fill="#C0DD97" opacity="0.5"/>
+          <rect x="10" y="10" width="80" height="30" rx="4" fill="#C0DD97" opacity="0.3"/>
+          <!-- Roads -->
+          <rect x="0" y="140" width="500" height="18" fill="#B4B2A9" opacity="0.4"/>
+          <rect x="0" y="270" width="500" height="18" fill="#B4B2A9" opacity="0.4"/>
+          <rect x="155" y="0" width="18" height="420" fill="#B4B2A9" opacity="0.4"/>
+          <rect x="325" y="0" width="18" height="420" fill="#B4B2A9" opacity="0.4"/>
+          <!-- Buildings -->
+          <rect x="12" y="12" width="130" height="116" rx="6" fill="#fff" opacity="0.55"/>
+          <text x="77" y="60" text-anchor="middle" font-size="11" fill="#5F5E5A" font-family="sans-serif">資工館</text>
+          <rect x="12" y="170" width="130" height="88" rx="6" fill="#fff" opacity="0.55"/>
+          <text x="77" y="218" text-anchor="middle" font-size="11" fill="#5F5E5A" font-family="sans-serif">生科館</text>
+          <rect x="12" y="290" width="130" height="120" rx="6" fill="#fff" opacity="0.55"/>
+          <text x="77" y="358" text-anchor="middle" font-size="11" fill="#5F5E5A" font-family="sans-serif">宿舍 A 棟</text>
+          <rect x="185" y="12" width="128" height="116" rx="6" fill="#fff" opacity="0.55"/>
+          <text x="249" y="60" text-anchor="middle" font-size="11" fill="#5F5E5A" font-family="sans-serif">圖書館</text>
+          <rect x="185" y="170" width="128" height="88" rx="6" fill="#97C459" opacity="0.2"/>
+          <text x="249" y="218" text-anchor="middle" font-size="11" fill="#3B6D11" font-family="sans-serif">學生活動中心</text>
+          <rect x="185" y="290" width="128" height="120" rx="6" fill="#fff" opacity="0.55"/>
+          <text x="249" y="358" text-anchor="middle" font-size="11" fill="#5F5E5A" font-family="sans-serif">宿舍 B 棟</text>
+          <rect x="355" y="12" width="132" height="116" rx="6" fill="#fff" opacity="0.55"/>
+          <text x="421" y="60" text-anchor="middle" font-size="11" fill="#5F5E5A" font-family="sans-serif">行政大樓</text>
+          <rect x="355" y="170" width="132" height="88" rx="6" fill="#fff" opacity="0.55"/>
+          <text x="421" y="218" text-anchor="middle" font-size="11" fill="#5F5E5A" font-family="sans-serif">餐廳</text>
+
+          <!-- Compass -->
+          <text x="470" y="30" text-anchor="middle" font-size="13" fill="#888780" font-family="sans-serif">N</text>
+          <line x1="470" y1="34" x2="470" y2="44" stroke="#888780" stroke-width="1.5"/>
+
+          <!-- Machine pins (placed by lat/lng converted to viewBox coords) -->
+          <!-- M001 資工館 online -->
+          <g class="machine-pin" data-id="M001" onclick="selectMachine('M001')" style="cursor:pointer">
+            <circle cx="77" cy="115" r="13" fill="white" opacity="0.8"/>
+            <circle cx="77" cy="115" r="7" fill="#3B6D11"/>
+            <circle class="map-pulse" cx="77" cy="115" r="12" fill="#3B6D11" opacity="0.2"/>
+            <text x="77" y="119" text-anchor="middle" font-size="9" fill="white" font-family="sans-serif" font-weight="500">M1</text>
+          </g>
+          <!-- M002 圖書館A online -->
+          <g class="machine-pin" data-id="M002" onclick="selectMachine('M002')" style="cursor:pointer">
+            <circle cx="210" cy="120" r="13" fill="white" opacity="0.8"/>
+            <circle cx="210" cy="120" r="7" fill="#3B6D11"/>
+            <circle class="map-pulse" cx="210" cy="120" r="12" fill="#3B6D11" opacity="0.2"/>
+            <text x="210" y="124" text-anchor="middle" font-size="9" fill="white" font-family="sans-serif" font-weight="500">M2</text>
+          </g>
+          <!-- M003 圖書館B full -->
+          <g class="machine-pin" data-id="M003" onclick="selectMachine('M003')" style="cursor:pointer">
+            <circle cx="270" cy="120" r="13" fill="white" opacity="0.8"/>
+            <circle cx="270" cy="120" r="7" fill="#BA7517"/>
+            <text x="270" y="124" text-anchor="middle" font-size="9" fill="white" font-family="sans-serif" font-weight="500">M3</text>
+          </g>
+          <!-- M004 學活 online -->
+          <g class="machine-pin" data-id="M004" onclick="selectMachine('M004')" style="cursor:pointer">
+            <circle cx="249" cy="215" r="13" fill="white" opacity="0.8"/>
+            <circle cx="249" cy="215" r="7" fill="#3B6D11"/>
+            <circle class="map-pulse" cx="249" cy="215" r="12" fill="#3B6D11" opacity="0.2"/>
+            <text x="249" y="219" text-anchor="middle" font-size="9" fill="white" font-family="sans-serif" font-weight="500">M4</text>
+          </g>
+          <!-- M005 生科館 offline -->
+          <g class="machine-pin" data-id="M005" onclick="selectMachine('M005')" style="cursor:pointer">
+            <circle cx="77" cy="210" r="13" fill="white" opacity="0.8"/>
+            <circle cx="77" cy="210" r="7" fill="#888780"/>
+            <text x="77" y="214" text-anchor="middle" font-size="9" fill="white" font-family="sans-serif" font-weight="500">M5</text>
+          </g>
+          <!-- M006 宿A online -->
+          <g class="machine-pin" data-id="M006" onclick="selectMachine('M006')" style="cursor:pointer">
+            <circle cx="77" cy="330" r="13" fill="white" opacity="0.8"/>
+            <circle cx="77" cy="330" r="7" fill="#3B6D11"/>
+            <circle class="map-pulse" cx="77" cy="330" r="12" fill="#3B6D11" opacity="0.2"/>
+            <text x="77" y="334" text-anchor="middle" font-size="9" fill="white" font-family="sans-serif" font-weight="500">M6</text>
+          </g>
+          <!-- M007 宿B online -->
+          <g class="machine-pin" data-id="M007" onclick="selectMachine('M007')" style="cursor:pointer">
+            <circle cx="249" cy="355" r="13" fill="white" opacity="0.8"/>
+            <circle cx="249" cy="355" r="7" fill="#3B6D11"/>
+            <circle class="map-pulse" cx="249" cy="355" r="12" fill="#3B6D11" opacity="0.2"/>
+            <text x="249" y="359" text-anchor="middle" font-size="9" fill="white" font-family="sans-serif" font-weight="500">M7</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Machine list -->
+      <div>
+        <div class="stat-lbl" style="margin-bottom:10px">所有機台</div>
+        <div class="machine-list" id="machine-list"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Machine detail modal -->
+<div class="modal-overlay" id="machine-modal" onclick="if(event.target===this)closeMachineModal()">
+  <div class="modal" id="machine-modal-content">
+    <button class="modal-close" onclick="closeMachineModal()">✕</button>
+    <div id="machine-modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="global-toast"></div>
+<script src="js/shared.js"></script>
+<script>
+  document.getElementById('sidebar-mount').innerHTML = renderSidebar('map');
+  const onlineCount = DATA.machines.filter(m=>m.status==='online').length;
+  document.getElementById('online-count').textContent = onlineCount;
+
+  const statusLabel = {online:'可用', full:'容量已滿', offline:'離線維護'};
+  const statusColor = {online:'var(--green-700)', full:'#BA7517', offline:'var(--gray-400)'};
+  const fillColor   = {online:'var(--green-600)', full:'#EF9F27', offline:'var(--gray-200)'};
+
+  const mList = document.getElementById('machine-list');
+  DATA.machines.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'machine-card';
+    card.id = 'card-'+m.id;
+    card.onclick = () => openMachineModal(m.id);
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="dot-${m.status}"></span>
+        <div class="machine-name">${m.name}</div>
+        <span class="badge" style="margin-left:auto;font-size:10px;background:${m.status==='online'?'var(--green-100)':m.status==='full'?'#FAEEDA':'var(--gray-50)'};color:${statusColor[m.status]}">${statusLabel[m.status]}</span>
+      </div>
+      <div class="machine-loc">${m.loc}</div>
+      <div class="machine-footer">
+        <span style="font-size:11px;color:var(--gray-400)">容量</span>
+        <div class="fill-bar-wrap"><div class="fill-bar" style="width:${m.fill}%;background:${fillColor[m.status]}"></div></div>
+        <span class="fill-pct">${m.fill}%</span>
+      </div>`;
+    mList.appendChild(card);
+  });
+
+  function selectMachine(id) {
+    document.querySelectorAll('.machine-card').forEach(c=>c.classList.remove('selected'));
+    const card = document.getElementById('card-'+id);
+    if (card) { card.classList.add('selected'); card.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+    openMachineModal(id);
+  }
+
+  function openMachineModal(id) {
+    const m = DATA.machines.find(x=>x.id===id);
+    if (!m) return;
+    document.getElementById('machine-modal-body').innerHTML = `
+      <div style="margin-bottom:16px">
+        <div class="modal-title">${m.name}</div>
+        <div class="modal-sub">${m.id} · ${m.loc}</div>
+      </div>
+      <div class="modal-row"><span class="modal-key">狀態</span><span class="modal-val" style="color:${statusColor[m.status]}">${statusLabel[m.status]}</span></div>
+      <div class="modal-row"><span class="modal-key">目前容量</span><span class="modal-val">${m.fill}%</span></div>
+      <div class="modal-row"><span class="modal-key">機台 ID</span><span class="modal-val" style="font-family:'DM Mono',monospace">${m.id}</span></div>
+      <div class="modal-row"><span class="modal-key">最近使用</span><span class="modal-val">2 分鐘前</span></div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        ${m.status==='online'
+          ? `<button class="btn btn-primary" onclick="showToast('已導航至 ${m.name}');closeMachineModal()">📍 導航到這裡</button>`
+          : `<button class="btn btn-secondary" onclick="showToast('已回報異常，感謝您的通報！');closeMachineModal()">回報異常</button>`}
+        <button class="btn btn-secondary" onclick="closeMachineModal()">關閉</button>
+      </div>`;
+    document.getElementById('machine-modal').classList.add('open');
+  }
+
+  function closeMachineModal() {
+    document.getElementById('machine-modal').classList.remove('open');
+    document.querySelectorAll('.machine-card').forEach(c=>c.classList.remove('selected'));
+  }
+</script>
+</body>
+</html>

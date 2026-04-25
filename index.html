@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SortLogix — 總覽</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <style>
+    .bento { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+    .bento-wide { grid-column: span 2; }
+    .streak-dots { display: grid; grid-template-columns: repeat(7,1fr); gap:5px; margin-top:10px; }
+    .streak-dot  { aspect-ratio:1; border-radius:50%; background:var(--gray-100); }
+    .streak-dot.on  { background:var(--green-600); }
+    .streak-dot.now { background:var(--green-200); border:2px solid var(--green-700); }
+    .mascot-card { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; background:var(--green-100); border-color:var(--green-200); text-align:center; }
+    .mascot-name { font-size:12px; font-weight:500; color:var(--green-800); }
+    .mascot-msg  { font-size:11px; color:var(--green-700); }
+    .quick-actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+    .history-mini { list-style:none; margin-top:10px; display:flex; flex-direction:column; gap:2px; }
+    .hm-item { display:flex; align-items:center; gap:10px; padding:8px 6px; border-radius:8px; cursor:pointer; transition:background var(--transition); text-decoration:none; color:inherit; }
+    .hm-item:hover { background:var(--gray-50); }
+    .hm-info { flex:1; min-width:0; }
+    .hm-name { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .hm-meta { font-size:11px; color:var(--gray-400); }
+    .hm-pts  { font-size:12px; font-weight:500; color:var(--green-700); font-family:'DM Mono',monospace; flex-shrink:0; }
+    .goal-row { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+    .goal-hdr { display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <main class="main-content">
+    <div class="page-header fade-up">
+      <h1 class="page-title">早安，<span id="user-name"></span> 👋</h1>
+      <p class="page-subtitle" id="today-date"></p>
+    </div>
+
+    <div class="bento fade-up-2">
+      <!-- Credits -->
+      <div class="card">
+        <div class="stat-lbl">綠色積分</div>
+        <div class="stat-val" style="color:var(--green-700)" id="credits-num">0</div>
+        <div class="stat-sub">Green Credits</div>
+        <div class="progress-wrap" style="margin-top:14px;">
+          <div class="progress-fill" id="credits-bar" style="width:0%;background:var(--green-600);"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--gray-400)">
+          <span>本月目標</span><span style="color:var(--gray-700);font-weight:500">620 / 1,000</span>
+        </div>
+      </div>
+
+      <!-- CO2 -->
+      <div class="card">
+        <div class="stat-lbl">本月減碳量</div>
+        <div class="stat-val">4.7</div>
+        <div class="stat-sub">公斤 CO₂ 等量</div>
+        <div style="margin-top:12px;">
+          <svg width="100%" height="40" viewBox="0 0 160 40" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#C0DD97" stop-opacity="0.5"/>
+                <stop offset="100%" stop-color="#C0DD97" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polyline points="0,35 25,30 45,25 65,20 85,23 105,14 130,9 160,6" fill="none" stroke="#639922" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,35 25,30 45,25 65,20 85,23 105,14 130,9 160,6 160,40 0,40" fill="url(#sg)" stroke="none"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Streak -->
+      <div class="card">
+        <div class="stat-lbl">連續使用</div>
+        <div class="stat-val" style="color:var(--green-700)">12</div>
+        <div class="stat-sub">連續天數</div>
+        <div class="streak-dots" id="streak-dots"></div>
+      </div>
+
+      <!-- History preview -->
+      <div class="card bento-wide">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="stat-lbl" style="margin:0">最近回收紀錄</div>
+          <a href="history.html" class="btn btn-secondary" style="font-size:12px;padding:6px 14px;">查看全部 →</a>
+        </div>
+        <ul class="history-mini" id="history-mini"></ul>
+      </div>
+
+      <!-- Mascot -->
+      <div class="card mascot-card">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <ellipse cx="36" cy="44" rx="16" ry="18" fill="#27500A"/>
+          <ellipse cx="36" cy="31" rx="15" ry="15" fill="#3B6D11"/>
+          <ellipse cx="23" cy="19" rx="6" ry="7" fill="#3B6D11"/>
+          <ellipse cx="49" cy="19" rx="6" ry="7" fill="#3B6D11"/>
+          <ellipse cx="23" cy="19" rx="3.5" ry="4.5" fill="#C0DD97"/>
+          <ellipse cx="49" cy="19" rx="3.5" ry="4.5" fill="#C0DD97"/>
+          <ellipse cx="36" cy="33" rx="10" ry="9" fill="#C0DD97"/>
+          <circle cx="31" cy="30" r="2.2" fill="#27500A"/>
+          <circle cx="41" cy="30" r="2.2" fill="#27500A"/>
+          <ellipse cx="36" cy="35.5" rx="3.5" ry="2.2" fill="#3B6D11"/>
+          <circle cx="36" cy="59" r="8" fill="#639922"/>
+          <text x="36" y="63" text-anchor="middle" font-size="11" fill="#EAF3DE" font-family="sans-serif">♻</text>
+          <line x1="20" y1="46" x2="28" y2="51" stroke="#27500A" stroke-width="3.5" stroke-linecap="round"/>
+          <line x1="52" y1="46" x2="44" y2="51" stroke="#27500A" stroke-width="3.5" stroke-linecap="round"/>
+        </svg>
+        <div class="mascot-name">小綠的鼓勵</div>
+        <div class="mascot-msg">今天已分類 3 次！<br/>再 380 分就達標了！</div>
+        <span class="badge badge-green">● 本週最佳</span>
+      </div>
+
+      <!-- Goals -->
+      <div class="card bento-wide">
+        <div class="stat-lbl">本月目標進度</div>
+        <div class="goal-row" id="goal-row"></div>
+      </div>
+    </div>
+
+    <div class="quick-actions fade-up-3">
+      <a href="history.html" class="btn btn-secondary">📋 查看回收歷史</a>
+      <a href="map.html"     class="btn btn-secondary">🗺️ 找附近機台</a>
+      <a href="rewards.html" class="btn btn-primary">🎁 兌換獎勵</a>
+    </div>
+  </main>
+</div>
+<div class="toast" id="global-toast"></div>
+<script src="js/shared.js"></script>
+<script>
+  document.getElementById('sidebar-mount').innerHTML = renderSidebar('index');
+  document.getElementById('user-name').textContent = DATA.user.name;
+  document.getElementById('today-date').textContent = '今天是美好的回收日 · ' + new Date().toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric'});
+
+  const dotWrap = document.getElementById('streak-dots');
+  DATA.streakDays.forEach((v,i) => {
+    const d = document.createElement('div');
+    d.className = 'streak-dot'+(v===true?' on':v==='today'?' now':'');
+    dotWrap.appendChild(d);
+  });
+
+  const hList = document.getElementById('history-mini');
+  DATA.records.slice(0,4).forEach(r => {
+    const li = document.createElement('li');
+    li.innerHTML = `<a href="history.html" class="hm-item">
+      <div class="icon-box icon-${r.cat}" style="font-size:15px;line-height:36px;text-align:center">${r.icon}</div>
+      <div class="hm-info"><div class="hm-name">${r.name}</div><div class="hm-meta">${r.date.slice(5).replace('-','/')} ${r.time} · ${r.loc}</div></div>
+      <div class="hm-pts">+${r.pts} pts</div></a>`;
+    hList.appendChild(li);
+  });
+
+  const goals = [
+    {name:'紙類回收',val:18,max:20,color:'var(--green-600)'},
+    {name:'塑膠容器',val:12,max:15,color:'var(--green-700)'},
+    {name:'金屬鋁罐',val:7, max:10,color:'var(--green-400)'},
+  ];
+  const gRow = document.getElementById('goal-row');
+  goals.forEach(g => {
+    const pct = Math.round(g.val/g.max*100);
+    const div = document.createElement('div');
+    div.innerHTML = `<div class="goal-hdr"><span style="color:var(--gray-500)">${g.name}</span><span style="font-weight:500">${g.val} / ${g.max} 件</span></div>
+      <div class="progress-wrap"><div class="progress-fill" data-w="${pct}" style="width:0%;background:${g.color}"></div></div>`;
+    gRow.appendChild(div);
+  });
+
+  setTimeout(() => {
+    document.getElementById('credits-num').textContent = DATA.credits.toLocaleString();
+    document.getElementById('credits-bar').style.width = Math.round(DATA.credits/DATA.creditsGoal*100)+'%';
+    document.querySelectorAll('.progress-fill[data-w]').forEach(el => el.style.width = el.dataset.w+'%');
+  }, 200);
+</script>
+</body>
+</html>

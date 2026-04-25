@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SortLogix — 回收歷史</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <style>
+    .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
+    .cat-bars { margin-bottom:20px; display:flex; flex-direction:column; gap:10px; }
+    .cat-bar-row { display:flex; flex-direction:column; gap:4px; }
+    .cat-bar-hdr { display:flex; justify-content:space-between; font-size:12px; color:var(--gray-500); }
+    .cat-bar-hdr strong { color:var(--gray-900); font-weight:500; }
+    .record-list { display:flex; flex-direction:column; gap:2px; }
+    .record-item { display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:10px; cursor:pointer; transition:background var(--transition); }
+    .record-item:hover { background:var(--gray-50); }
+    .record-info { flex:1; min-width:0; }
+    .record-name { font-size:13.5px; font-weight:500; }
+    .record-meta { font-size:12px; color:var(--gray-400); margin-top:2px; }
+    .record-right { text-align:right; flex-shrink:0; }
+    .record-pts  { font-size:13px; font-weight:500; color:var(--green-700); font-family:'DM Mono',monospace; }
+    .record-wt   { font-size:11px; color:var(--gray-400); margin-top:2px; }
+    .month-heading { font-size:11px; font-weight:500; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.7px; padding:12px 0 6px; border-bottom:1px solid rgba(0,0,0,0.06); margin-bottom:4px; }
+    .modal-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.06); }
+    .modal-row:last-child { border-bottom:none; }
+    .modal-key { font-size:12px; color:var(--gray-400); }
+    .modal-val { font-size:13px; font-weight:500; }
+    .modal { position:relative; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <main class="main-content">
+    <div class="page-header fade-up">
+      <h1 class="page-title">回收歷史紀錄</h1>
+      <p class="page-subtitle">共 <span id="total-count">0</span> 筆 · 累積 <span id="total-pts">0</span> 積分</p>
+    </div>
+
+    <div class="summary-grid fade-up">
+      <div class="card">
+        <div class="stat-lbl">總回收次數</div>
+        <div class="stat-val" id="s-count">0</div>
+      </div>
+      <div class="card">
+        <div class="stat-lbl">累積積分</div>
+        <div class="stat-val" style="color:var(--green-700)" id="s-pts">0</div>
+      </div>
+      <div class="card">
+        <div class="stat-lbl">減少 CO₂</div>
+        <div class="stat-val">4.7</div>
+        <div class="stat-sub">kg</div>
+      </div>
+    </div>
+
+    <div class="card fade-up-2" style="margin-bottom:16px;">
+      <div class="stat-lbl" style="margin-bottom:12px;">分類分布</div>
+      <div class="cat-bars" id="cat-bars"></div>
+    </div>
+
+    <div class="card fade-up-2">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="stat-lbl" style="margin:0">所有紀錄</div>
+        <div class="chip-row" style="margin:0" id="filter-chips">
+          <button class="chip active" data-cat="all">全部</button>
+          <button class="chip" data-cat="paper">紙類</button>
+          <button class="chip" data-cat="plastic">塑膠</button>
+          <button class="chip" data-cat="metal">金屬</button>
+          <button class="chip" data-cat="organic">廚餘</button>
+        </div>
+      </div>
+      <div class="record-list" id="record-list"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detail-modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-content">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="global-toast"></div>
+<script src="js/shared.js"></script>
+<script>
+  document.getElementById('sidebar-mount').innerHTML = renderSidebar('history');
+
+  const totalPts = DATA.records.reduce((s,r) => s+r.pts, 0);
+  document.getElementById('total-count').textContent = DATA.records.length;
+  document.getElementById('total-pts').textContent = totalPts;
+  document.getElementById('s-count').textContent = DATA.records.length;
+  document.getElementById('s-pts').textContent = totalPts;
+
+  // Cat bars
+  const cats = ['paper','plastic','metal','organic'];
+  const catCounts = {};
+  cats.forEach(c => catCounts[c] = DATA.records.filter(r => r.cat===c).length);
+  const total = DATA.records.length;
+  const barColors = {paper:'var(--green-600)',plastic:'#378ADD',metal:'var(--gray-400)',organic:'#BA7517'};
+  const barsEl = document.getElementById('cat-bars');
+  cats.forEach(c => {
+    const pct = Math.round(catCounts[c]/total*100);
+    const div = document.createElement('div');
+    div.className = 'cat-bar-row';
+    div.innerHTML = `<div class="cat-bar-hdr"><span>${catLabel[c]}</span><strong>${catCounts[c]} 件 (${pct}%)</strong></div>
+      <div class="progress-wrap"><div class="progress-fill" data-w="${pct}" style="width:0%;background:${barColors[c]}"></div></div>`;
+    barsEl.appendChild(div);
+  });
+  setTimeout(() => document.querySelectorAll('.progress-fill[data-w]').forEach(el => el.style.width=el.dataset.w+'%'), 200);
+
+  // Records
+  let currentCat = 'all';
+  function groupByMonth(data) {
+    const m = {};
+    data.forEach(r => { const k=r.date.slice(0,7); if(!m[k])m[k]=[]; m[k].push(r); });
+    return m;
+  }
+  function monthName(k) {
+    const [y,m] = k.split('-');
+    const ns=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+    return y+' 年 '+ns[parseInt(m,10)-1];
+  }
+  function renderList(cat) {
+    const list = document.getElementById('record-list');
+    const filtered = cat==='all' ? DATA.records : DATA.records.filter(r=>r.cat===cat);
+    if (!filtered.length) { list.innerHTML='<div style="text-align:center;padding:2rem;color:var(--gray-400);font-size:13px">此類別暫無紀錄</div>'; return; }
+    const groups = groupByMonth(filtered);
+    let html = '';
+    Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(month => {
+      html += `<div class="month-heading">${monthName(month)}</div>`;
+      groups[month].forEach(r => {
+        html += `<div class="record-item" onclick="openDetail(${r.id})">
+          <div class="icon-box icon-${r.cat}" style="font-size:16px;line-height:36px;text-align:center">${r.icon}</div>
+          <div class="record-info">
+            <div class="record-name">${r.name}</div>
+            <div class="record-meta">${r.date.slice(5).replace('-','/')} ${r.time} · ${r.loc}</div>
+          </div>
+          <div class="record-right">
+            <div class="record-pts">+${r.pts} pts</div>
+            <div class="record-wt">${r.wt} g</div>
+          </div>
+        </div>`;
+      });
+    });
+    list.innerHTML = html;
+  }
+  renderList('all');
+
+  document.getElementById('filter-chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    renderList(chip.dataset.cat);
+  });
+
+  function openDetail(id) {
+    const r = DATA.records.find(x=>x.id===id);
+    if (!r) return;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div class="icon-box icon-${r.cat}" style="width:44px;height:44px;border-radius:12px;font-size:20px;line-height:44px;text-align:center">${r.icon}</div>
+        <div>
+          <div class="modal-title">${r.name}</div>
+          <div class="modal-sub">${catLabel[r.cat]}</div>
+        </div>
+      </div>
+      <div class="modal-row"><span class="modal-key">日期</span><span class="modal-val">${r.date}</span></div>
+      <div class="modal-row"><span class="modal-key">時間</span><span class="modal-val">${r.time}</span></div>
+      <div class="modal-row"><span class="modal-key">地點</span><span class="modal-val">${r.loc}</span></div>
+      <div class="modal-row"><span class="modal-key">重量</span><span class="modal-val">${r.wt} g</span></div>
+      <div class="modal-row"><span class="modal-key">獲得積分</span><span class="modal-val" style="color:var(--green-700)">+${r.pts} pts</span></div>
+      <div class="modal-row"><span class="modal-key">AI 信心度</span><span class="modal-val">98.4%</span></div>
+      <div style="margin-top:16px">
+        <a href="map.html" class="btn btn-secondary" style="font-size:12px;padding:7px 14px;">查看機台位置</a>
+      </div>`;
+    document.getElementById('detail-modal').classList.add('open');
+  }
+  function closeModal() { document.getElementById('detail-modal').classList.remove('open'); }
+</script>
+</body>
+</html>
